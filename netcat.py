@@ -103,7 +103,7 @@ class CustomNetCat:
             self._sock.close()
             sys.exit()
 
-    def _server_reverse_shell_procedure(self, sock):
+    def _server_reverse_shell_loop(self, sock):
         self.send_msg(sock, 'initiate_reverse_shell')
         while True:
             try:
@@ -136,7 +136,7 @@ class CustomNetCat:
             self._spawn_shell(client_sock)
 
         elif self.args.reverseshell:
-            self._server_reverse_shell_procedure(client_sock)
+            self._server_reverse_shell_loop(client_sock)
             self._sock.close()
             sys.exit()
 
